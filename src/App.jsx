@@ -13,6 +13,8 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [data, setData] = useState([]);
 
+  const [error, setError] = useState('');
+
   useEffect(() => {
     async function fetchPosts() {
       try {
@@ -34,62 +36,58 @@ function App() {
     fetchPosts();
   }, []);
 
+  const addTerminHandler = async (terminData) => { 
+    const selectedDay = dayjs(selectedDate.$d);     
+    const newTerminStart = dayjs(terminData.start);
+    const newTerminEnd = dayjs(terminData.end);
 
-  const [error, setError] = useState('');
-
-
-   const addTerminHandler = (terminData) => {        //primamo kao argument novounešeni termin iz NewTermin.jsx
-     const selectedDay = dayjs(selectedDate.$d);     //pretvaramo odabrani dan sa kalendara u dayjs objekt
-     const newTerminStart = dayjs(terminData.start); //pretvaramo početna i završna vremena našeg novog termina u dayjs objekt
-     const newTerminEnd = dayjs(terminData.end);
-
-     const conflict = data.some((item) => {    //iteriramo kroz svaki objekt arraya data i provjeravamo odgovara li kome sljedeći uvjeti (funkcija conflict vraća bool true ili false)
-       const itemStart = dayjs(item.start);    //početak termina trenutnog objekta u iteraciji 
-       const itemEnd = dayjs(item.end);        //završetak termina trenutnog objekta u iteraciji
-       return (
-         itemStart.isSame(selectedDay, 'day') &&     //provjerava jel datum trenutnog objekta u iteraciji jednak odabranom objektu u kalendaru
-         (
-            (newTerminStart.isAfter(itemStart) && newTerminStart.isBefore(itemEnd)) ||      //provjerava je li početak našeg novog termina između početka i završetka termina trenutnog objekta u iteraciji
-          (newTerminEnd.isAfter(itemStart) && newTerminEnd.isBefore(itemEnd)) ||          //provjerava je li kraj našeg novog termina između početka i završetka termina trenutnog objekta u iteraciji
-          (newTerminStart.isSame(itemStart) || newTerminEnd.isSame(itemEnd)) ||           //provjerava je li početak našeg novog termina jednak početku ili završetku termina trenutnog objekta u iteraciji 
-          (newTerminStart.isBefore(itemStart) && newTerminEnd.isAfter(itemEnd))           //provjerava jel naš novi termin u potpunosti "prekriva" cijeli termin trenutnog objekta u iteraciji
+    const conflict = data.some((item) => {
+      const itemStart = dayjs(item.start); 
+      const itemEnd = dayjs(item.end);  
+      return (
+        itemStart.isSame(selectedDay, 'day') &&     
+        (
+          (newTerminStart.isAfter(itemStart) && newTerminStart.isBefore(itemEnd)) ||      
+          (newTerminEnd.isAfter(itemStart) && newTerminEnd.isBefore(itemEnd)) ||          
+          (newTerminStart.isSame(itemStart) || newTerminEnd.isSame(itemEnd)) ||           
+          (newTerminStart.isBefore(itemStart) && newTerminEnd.isAfter(itemEnd))           
         )
       );
     });
 
     if (conflict) {
-      setError('Termin je zauzet!');   //ako conflict vraća true bacamo error i ne dodajemo termin
+      setError('Termin je zauzet!'); 
       return;
     }
 
-    setData((prevData) => [     //funkcija koja updatea trenutno stanje sa novim terminom; kao parametar prima prevData (trenutno stanje termina)
-      ...prevData,                  
-      { id: prevData.length + 1, ...terminData },       //funkcija vraća novi array sa svim prethodnim terminima i dodaje naš novi termin te mu dodaje i id koji je veličine prethodnog arraya + 1
-    ]);
-    setError('');      //čisti bilo kakve postojeće errore
-    setModalVisible(false);
-  };
+    const newTermin = { id: data.length + 1, ...terminData };
 
+    try {
+      const response = await fetch('http://localhost:8080/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newTermin),
+      });
 
+      if (!response.ok) {
+        throw new Error('Failed to save the termin.');
+      }
 
+      setData((prevData) => [     
+        ...prevData, 
+        newTermin
+      ]);
+      setError(''); 
+      setModalVisible(false);
 
-  /*const addTerminHandler = (terminData) => {
-    setData((prevData) => [
-      ...prevData,
-      { id: prevData.length + 1, ...terminData },
-    ]);
-  };
-  */
-
-  /*useEffect(() => {
-    if (selectedDate) {
-      console.log(selectedDate.$d);
-      console.log(data[0].start)
-    } else {
-      console.log('Selected date is null');
+    } catch (err) {
+      setError('Failed to save the termin.');
+      console.error('Error saving termin:', err);
     }
-  }, [selectedDate]);
-*/
+  };
+
 
   function dateChangeHandler(newValue) {      //funkcija za ažuriranje odabranog datuma
     setSelectedDate(newValue);
@@ -117,9 +115,23 @@ function App() {
     setError('');
   }
 
-  const deleteTerminHandler = (id) => {
-    setData((prevData) => prevData.filter((termin) => termin.id !== id));
+  const deleteTerminHandler = async (id) => {
+    try {
+      const response = await fetch(`http://localhost:8080/posts/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete the termin.');
+      }
+
+      setData((prevData) => prevData.filter((termin) => termin.id !== id));
+    } catch (err) {
+      setError('Failed to delete the termin.');
+      console.error('Error deleting termin:', err);
+    }
   };
+
   
 
   return (
